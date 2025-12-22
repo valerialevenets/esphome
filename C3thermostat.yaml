@@ -1,0 +1,116 @@
+substitutions:
+  device_name: thermostat
+  friendly_name: "thermostat"
+  device_description: "Temperature based fan control"
+  temperature_threshold_low: "20" # At what temperature, in celcius, should the fan turn on to its minimum speed
+  temperature_threshold_high: "50" # At what temperature, in celcius, should the fan turn on to its maximum speed
+  minimum_fan_speed: "25" # What is the minimum fan speed, as a percentage
+  ssid: WIFI_NAME
+  password: WIFI_PASSWORD
+  apikey:
+esphome:
+  name: '${device_name}'
+  comment: '${device_description}'
+
+esp32:
+  board: seeed_xiao_esp32c3
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: ""
+
+ota:
+  - platform: esphome
+    password: ""
+
+wifi:
+  ssid: ${ssid}
+  password: ${password}
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Testfan Fallback Hotspot"
+    password: ${password}
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+  id: bus_a
+# PWM output for the fan speed control
+output:
+  - platform: ledc
+    pin: GPIO1
+    frequency: 25000 Hz
+    id: pwm_output
+# Hidden switch object to control the relay
+# BME/BMP280 temperature sensor
+# Calls a script to set the fan state/speed whenever the temperature value changes
+sensor:
+  - platform: pulse_counter
+    pin:
+      number: GPIO0
+      mode:
+        input: true
+        pullup: true
+    name: Fan 1 RPM
+    id: fan1_rpm
+    unit_of_measurement: 'RPM'
+    filters:
+      - multiply: 0.5
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: DISABLE
+    update_interval: 3s
+  - platform: bmp280_i2c
+    address: 0x77
+    update_interval: 2s
+    temperature:
+      name: "${device_description} Temperature"
+      id: temperature_sensor
+      on_value:
+        then:
+          - script.execute: set_fan_state
+# The actual fan entity presented to Home Assistant
+fan:
+  - platform: speed
+    output: pwm_output
+    name: "${device_description}"
+    id: "the_fan"
+# Sets the speed of the fan based on a linear calculation
+# between the high and low temperature thresholds and
+# the minimum specified fan speed
+script:
+  - id: set_fan_state
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(temperature_sensor).state < id(${temperature_threshold_low});
+          then:
+            - fan.turn_off: the_fan
+          else:
+            - fan.turn_on:
+                id: the_fan
+                speed: !lambda |-
+                  if (id(temperature_sensor).state >= id(${temperature_threshold_high})) {
+                    // Over upper threshold, fan speed at maximum
+                    ESP_LOGD("Fan speed calc", "Temperature is above or equal to upper threshold so setting to max");
+                    return 100;
+                  }
+                  else {
+                    float calc_speed = ((100-id(${minimum_fan_speed})) / (id(${temperature_threshold_high})-id(${temperature_threshold_low})))*(id(temperature_sensor).state-id(${temperature_threshold_low}))+id(${minimum_fan_speed});
+                    ESP_LOGD("Fan speed calc", "calculated speed = %f", calc_speed);
+                    return calc_speed;
+                  }
+
+web_server:
+  port: 50
+
+captive_portal:
+    

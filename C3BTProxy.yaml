@@ -1,0 +1,36 @@
+substitutions:
+  name: esp32c3-bluetooth-proxy
+  friendly_name: C3 Bluetooth Proxy
+  ssid: WIFI_NAME
+  password: WIFI_PASSWORD
+  apikey:
+  device_description: "ESP32 C3 Supermini BT proxy"
+packages:
+  esphome.bluetooth-proxy: github://esphome/bluetooth-proxies/esp32-generic/esp32-generic-c3.yaml@main
+esphome:
+  name: c3
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+  comment: ${device_description}
+api:
+  encryption:
+    key: ${apikey}
+
+
+wifi:
+  ssid: ${ssid}
+  password: ${password}
+
+switch:
+  - platform: restart
+    name: "Restart ESP32 JKBMS"
+    id: restart_espjk
+
+time:
+  - platform: sntp
+    on_time:
+      # Every 60 minutes
+      - seconds: 0
+        minutes: /60
+        then:
+          - switch.toggle: restart_espjk
