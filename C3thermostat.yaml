@@ -36,6 +36,35 @@ wifi:
   ap:
     ssid: "Testfan Fallback Hotspot"
     password: ${password}
+# Power button controls
+switch:
+  - platform: gpio
+    pin:
+      number: GPIO4
+    id: power_button
+    restore_mode: ALWAYS_OFF
+
+button:
+  - platform: template
+    name: "PC Power Button (Short Press)"
+    id: pc_power_short
+    on_press:
+      - switch.turn_on: power_button
+      - delay: 1s  # Short press duration
+      - switch.turn_off: power_button
+
+  - platform: template
+    name: "PC Power Button (Long Press)"
+    id: pc_power_long
+    on_press:
+      - switch.turn_on: power_button
+      - delay: 10s  # Long press duration (e.g., force shutdown)
+      - switch.turn_off: power_button
+globals:
+  - id: long_press_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
 
 i2c:
   sda: GPIO8
